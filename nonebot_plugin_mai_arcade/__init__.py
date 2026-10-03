@@ -6,6 +6,7 @@ NoneBot2 舞萌DX机厅插件
 import datetime
 import json
 from pathlib import Path
+from typing import Optional
 
 from nonebot import require, get_driver, logger, on_command, on_message
 from nonebot.plugin import PluginMetadata
@@ -23,6 +24,7 @@ from .messaging import (
     reply_spec,
 )
 from .services import call_discover
+from .location import LocationPayload, extract_location
 
 
 __plugin_meta__ = PluginMetadata(
@@ -180,61 +182,62 @@ location_listener = on_message(priority=100, block=False)
 @location_listener.handle()
 async def handle_location_listener(event: MessageEvent):
     """处理位置消息，自动发现附近机厅"""
-    for seg in event.message:
-        if seg.type == "json":
-            try:
-                # 解析 CQ:json 的 data
-                cq_data = json.loads(seg.data["data"])
-                location = cq_data.get("meta", {}).get("Location.Search", {})
+    location: Optional[LocationPayload] = extract_location(event.message)
+    if location is None:
+        return
 
-                lat = float(location.get("lat", 0))
-                lon = float(location.get("lng", 0))
-                title = location.get("name", "未知位置")
+    # Gensokyo currently exposes an official QQ map card as text containing
+    # only ``address``/``desc``.  Do not invent coordinates or query Nearcade
+    # with (0, 0).  The card has already been handled by the client; without
+    # coordinates there is no nearby-search action to perform, so stay quiet.
+    if not location.has_coordinates:
+        return
 
-                if not lat or not lon:
-                    raise Exception("<UNK>")
+    lat = location.latitude
+    lon = location.longitude
+    # ``has_coordinates`` guarantees both values are present; keeping this
+    # guard makes the type narrowing explicit for Python 3.8 runtimes.
+    if lat is None or lon is None:
+        return
 
-                result, web_url = await call_discover(lat, lon, radius=10, name=title)
+    result, web_url = await call_discover(lat, lon, radius=10, name=location.title)
 
-                shops = result.get("shops", [])
-                if not shops:
-                    detail_button = safe_link_button(
-                        "打开详情", web_url, button_id="arcade_location_empty"
-                    )
-                    await location_listener.finish(
-                        reply_spec(
-                            "# 附近没有找到机厅\n\n详情页可查看附近搜索结果。",
-                            fallback_text=f"附近没有找到机厅\n👉 详情可查看：{web_url}",
-                            rows=((detail_button,),) if detail_button else (),
-                        )
-                    )
-                    return
+    shops = result.get("shops", [])
+    if not shops:
+        detail_button = safe_link_button(
+            "打开详情", web_url, button_id="arcade_location_empty"
+        )
+        await location_listener.finish(
+            reply_spec(
+                "# 附近没有找到机厅\n\n详情页可查看附近搜索结果。",
+                fallback_text=f"附近没有找到机厅\n👉 详情可查看：{web_url}",
+                rows=((detail_button,),) if detail_button else (),
+            )
+        )
+        return
 
-                reply_lines = []
-                for shop in shops[:3]:  # 只展示 3 个，避免刷屏
-                    name = shop.get("name", "未知机厅")
-                    dist_val = shop.get("distance", 0)
-                    dist_str = f"{dist_val * 1000:.0f}米" if isinstance(dist_val, (int, float)) else "未知距离"
-                    shop_addr = shop.get("address", {}).get("detailed", "")
-                    reply_lines.append(
-                        f"🎮 {escape_markdown(name)}（{dist_str}）\n"
-                        f"📍 {escape_markdown(shop_addr)}"
-                    )
+    reply_lines = []
+    for shop in shops[:3]:  # 只展示 3 个，避免刷屏
+        name = shop.get("name", "未知机厅")
+        dist_val = shop.get("distance", 0)
+        dist_str = f"{dist_val * 1000:.0f}米" if isinstance(dist_val, (int, float)) else "未知距离"
+        shop_addr = shop.get("address", {}).get("detailed", "")
+        reply_lines.append(
+            f"🎮 {escape_markdown(name)}（{dist_str}）\n"
+            f"📍 {escape_markdown(shop_addr)}"
+        )
 
-                reply = "\n\n".join(reply_lines) + f"\n\n👉 更多详情请点开：{web_url}"
-                detail_button = safe_link_button(
-                    "打开详情", web_url, button_id="arcade_location_more"
-                )
-                await location_listener.finish(
-                    reply_spec(
-                        "# 附近机厅\n\n" + "\n\n".join(reply_lines),
-                        fallback_text=reply,
-                        rows=((detail_button,),) if detail_button else (),
-                    )
-                )
-
-            except Exception as e:
-                raise
+    reply = "\n\n".join(reply_lines) + f"\n\n👉 更多详情请点开：{web_url}"
+    detail_button = safe_link_button(
+        "打开详情", web_url, button_id="arcade_location_more"
+    )
+    await location_listener.finish(
+        reply_spec(
+            "# 附近机厅\n\n" + "\n\n".join(reply_lines),
+            fallback_text=reply,
+            rows=((detail_button,),) if detail_button else (),
+        )
+    )
 
 
 # ``Matcher.finish`` and ``Matcher.pause`` call the class' ``send`` method.

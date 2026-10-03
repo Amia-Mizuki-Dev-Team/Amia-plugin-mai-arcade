@@ -30,7 +30,11 @@ async def search_nearcade_shops(keyword: str, page: int = 1, limit: int = 3) -> 
             'Accept': 'application/json'
         }
         
-        async with httpx.AsyncClient() as client:
+        # Some Windows deployments resolve Nearcade to an unreachable IPv6
+        # address first.  Bind the async transport to IPv4 so discovery does
+        # not fail while curl/other clients can still reach the same endpoint.
+        transport = httpx.AsyncHTTPTransport(local_address="0.0.0.0")
+        async with httpx.AsyncClient(transport=transport) as client:
             response = await client.get(url, headers=headers)
             response.raise_for_status()
             data = response.json()
@@ -102,7 +106,8 @@ async def call_discover(lat: float, lon: float, radius: int = 10, name: str = No
         
         query = urllib.parse.urlencode(params, safe="")
         
-        async with httpx.AsyncClient() as client:
+        transport = httpx.AsyncHTTPTransport(local_address="0.0.0.0")
+        async with httpx.AsyncClient(transport=transport) as client:
             response = await client.get(f"https://{BASE_HOST}/api/discover?{query}")
             response.raise_for_status()
             data = response.json()

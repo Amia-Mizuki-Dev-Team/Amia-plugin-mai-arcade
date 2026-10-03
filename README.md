@@ -123,6 +123,20 @@ MessageSegment(
 
 协议参考：[QQ 机器人 API v2](https://bot.q.qq.com/wiki/develop/api-v2/)、[官方 Markdown 消息文档](https://bot.q.qq.com/wiki/develop/api-v2/server-inter/message/type/markdown.html) 和 [Gensokyo Markdown 消息转换说明](https://github.com/Te-River/Gensokyo-NewQQ/blob/main/docs/%E6%96%87%E6%A1%A3-markdown%E6%B6%88%E6%81%AF.md)。
 
+## Gensokyo 位置消息
+
+Gensokyo 的官方 QQ Bot 位置卡片目前可能只转发地点名称和地址，不保证携带 `lat/lon`。插件不会用 `0,0` 或猜测坐标调用 Nearcade；没有坐标时保持静默，不额外发送提示消息。
+
+如果要查询附近机厅，请按 Gensokyo 位置文档的文本兼容格式发送：
+
+```text
+位置：栖霞区迈皋桥壹城 (32.112606, 118.834837)
+```
+
+也接受带有 `latitude/longitude`、`lat/lng` 或 `经纬度` 标记的文本，以及 OneBot 原生 `location` 段。收到有效坐标后，插件才会调用 Nearcade 附近发现接口；没有坐标时不触发查询，也不发送额外提示。
+
+参考：[Gensokyo 标准 CQ 位置说明](https://github.com/Te-River/Gensokyo-NewQQ/blob/main/docs/cq%E7%A0%81/%E6%A0%87%E5%87%86CQ%E7%A0%81/%E6%A0%87%E5%87%86cq%E7%A0%81-cq-location.md)。
+
 ## 常用命令
 
 ### 人数
