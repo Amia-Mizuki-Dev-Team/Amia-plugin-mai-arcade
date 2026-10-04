@@ -120,6 +120,12 @@ MessageSegment(
 
 协议参考：[QQ 机器人 API v2](https://bot.q.qq.com/wiki/develop/api-v2/)、[官方 Markdown 消息文档](https://bot.q.qq.com/wiki/develop/api-v2/server-inter/message/type/markdown.html) 和 [Gensokyo Markdown 消息转换说明](https://github.com/Te-River/Gensokyo-NewQQ/blob/main/docs/%E6%96%87%E6%A1%A3-markdown%E6%B6%88%E6%81%AF.md)。
 
+## Gensokyo Release015 兼容
+
+插件按 Gensokyo Release015 的 OneBot V11 事件字段工作：群消息中的 `sender.role` 使用 `owner`、`admin`、`member` 三个值，管理员鉴权由 `GROUP_ADMIN | GROUP_OWNER` 和服务端权限检查完成。按钮里的 `permission.type=1` 只负责客户端侧的管理员可点击提示，不能替代服务端鉴权。
+
+Markdown 消息继续使用 Release015 支持的 `data.data.markdown` 与 `data.data.keyboard.content.rows` 双层结构；不会依赖 Release015 之后新增的 CQ 码。使用 Release015 配置时保持 `cq_parse_mode: legacy`，本插件的指令、URL、Markdown 和键盘消息均按该模式的兼容路径发送。
+
 ## Gensokyo 位置消息
 
 Gensokyo 的官方 QQ Bot 位置卡片目前可能只转发地点名称和地址，不保证携带 `lat/lon`。插件不会用 `0,0` 或猜测坐标调用 Nearcade；收到这种卡片时会明确回复“缺少经纬度”，并提示可发送的文本格式。

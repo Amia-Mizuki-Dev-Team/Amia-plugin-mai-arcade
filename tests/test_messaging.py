@@ -11,7 +11,8 @@ from types import SimpleNamespace
 
 import nonebot
 import pytest
-from nonebot.adapters.onebot.v11 import Message, MessageSegment
+from nonebot.adapters.onebot.v11 import GroupMessageEvent, Message, MessageSegment
+from nonebot.adapters.onebot.v11.event import Sender
 from nonebot.exception import ActionFailed, FinishedException, NetworkError
 
 
@@ -48,6 +49,7 @@ from amia_plugin_mai_arcade.handlers.count import (  # noqa: E402
 )
 from amia_plugin_mai_arcade.handlers.arcade import query_updated_arcades  # noqa: E402
 from amia_plugin_mai_arcade.utils import get_shop_url  # noqa: E402
+from amia_plugin_mai_arcade.utils import is_superuser_or_admin  # noqa: E402
 from amia_plugin_mai_arcade.messaging import (  # noqa: E402
     build_markdown_segment,
     command_button,
@@ -193,6 +195,50 @@ def test_gensokyo_location_card_triggers_explanatory_reply_without_query() -> No
     assert "已收到位置卡片" in content
     assert "没有提供经纬度" in content
     assert "位置：地点名 (纬度, 经度)" in content
+
+
+def test_gensokyo_release015_sender_roles_match_plugin_admin_check() -> None:
+    """Release015 maps QQ member_role to OneBot sender.role verbatim."""
+
+    class FakeAdapter:
+        @staticmethod
+        def get_name() -> str:
+            return "OneBot V11"
+
+    bot = SimpleNamespace(
+        adapter=FakeAdapter(),
+        config=SimpleNamespace(superusers=set()),
+    )
+
+    def event_for(role: str) -> GroupMessageEvent:
+        return GroupMessageEvent(
+            time=1,
+            self_id=1905525797,
+            post_type="message",
+            sub_type="normal",
+            user_id=10001,
+            message_type="group",
+            message_id=20001,
+            message=Message("添加机厅"),
+            original_message="添加机厅",
+            raw_message="添加机厅",
+            font=0,
+            sender=Sender(user_id=10001, nickname="Amia_测试", role=role),
+            to_me=False,
+            group_id=30001,
+            anonymous=None,
+        )
+
+    async def run() -> None:
+        owner = event_for("owner")
+        admin = event_for("admin")
+        member = event_for("member")
+
+        assert await is_superuser_or_admin(bot, owner)
+        assert await is_superuser_or_admin(bot, admin)
+        assert not await is_superuser_or_admin(bot, member)
+
+    asyncio.run(run())
 
 
 def test_nearcade_shop_url_uses_current_canonical_route() -> None:
