@@ -39,8 +39,8 @@ Amia 项目的 `plugin_dirs` 已包含 `src/plugins`，克隆后可以直接由 
 plugins = ["Amia-plugin-mai-arcade"]
 ```
 
-这是一个直接放入 NoneBot `plugin_dirs` 的源码插件；不要把仓库再复制到
-`Amia-plugin-mai-arcade/nonebot_plugin_mai_arcade/`，也不需要通过可编辑安装制造第二层包目录。
+这是一个直接放入 NoneBot `plugin_dirs` 的源码插件；仓库根目录就是完整插件目录，
+不需要再复制或安装第二层同名目录。
 
 ## 配置
 

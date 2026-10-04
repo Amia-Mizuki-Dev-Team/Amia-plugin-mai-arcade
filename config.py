@@ -20,16 +20,19 @@ superusers = config.superusers
 block_group = set(["12345678"])
 search_sessions = {}  # 存储搜索会话状态
 
-# 数据文件路径。正常由 localstore 按插件注册表提供；当项目通过外层
-# discovery shim 导入内层源码时，localstore 无法在模块执行早期识别调用者，
-# 此时使用同一项目 data 根目录下的隔离回退目录，避免阻断整个 NoneBot 启动。
+# 数据文件路径。正常由 localstore 按插件注册表提供；在测试或独立导入
+# 场景下，如果 localstore 尚未建立插件上下文，则使用项目 data 根目录的
+# Amia 插件专属回退目录，避免阻断整个 NoneBot 启动。
 try:
     arcade_data_file: Path = store.get_plugin_data_file("arcade_data.json")
     arcade_marker_file: Path = store.get_plugin_data_file("arcade_cache_marker.json")
 except RuntimeError:
-    # Keep the historical data directory so flattening the source tree does
-    # not silently lose existing arcade data during an upgrade.
-    fallback_data_dir = Path("data") / "nonebot_plugin_mai_arcade"
+    # Reuse the previous fallback directory when it already contains data;
+    # otherwise new standalone runs use the Amia repository name.
+    fallback_data_dir = Path("data") / "Amia-plugin-mai-arcade"
+    legacy_data_dir = Path("data") / "nonebot_plugin_mai_arcade"
+    if not fallback_data_dir.exists() and legacy_data_dir.exists():
+        fallback_data_dir = legacy_data_dir
     fallback_data_dir.mkdir(parents=True, exist_ok=True)
     arcade_data_file = fallback_data_dir / "arcade_data.json"
     arcade_marker_file = fallback_data_dir / "arcade_cache_marker.json"
