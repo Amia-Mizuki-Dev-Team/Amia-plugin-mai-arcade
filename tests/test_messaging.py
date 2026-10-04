@@ -7,11 +7,12 @@ import importlib.util
 import os
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import nonebot
 import pytest
-from nonebot.adapters.onebot.v11 import MessageSegment
-from nonebot.exception import ActionFailed, NetworkError
+from nonebot.adapters.onebot.v11 import Message, MessageSegment
+from nonebot.exception import ActionFailed, FinishedException, NetworkError
 
 
 PLUGIN_ROOT = Path(__file__).resolve().parents[1]
@@ -31,7 +32,11 @@ _module = importlib.util.module_from_spec(_spec)
 sys.modules[_spec.name] = _module
 _spec.loader.exec_module(_module)
 
-from amia_plugin_mai_arcade import arcade_help  # noqa: E402
+from amia_plugin_mai_arcade import (  # noqa: E402
+    arcade_help,
+    handle_location_listener,
+    location_listener,
+)
 from amia_plugin_mai_arcade.config import plugin_config  # noqa: E402
 from amia_plugin_mai_arcade.handlers.arcade import _search_reply_spec  # noqa: E402
 from amia_plugin_mai_arcade.handlers.count import (  # noqa: E402
@@ -148,6 +153,46 @@ def test_search_and_count_payloads_keep_existing_flows() -> None:
         for row in count_rows
         for button in row["buttons"]
     )
+
+
+def test_gensokyo_location_card_triggers_explanatory_reply_without_query() -> None:
+    class FakeBot:
+        self_id = "official-gensokyo-test"
+
+        def __init__(self) -> None:
+            self.messages = []
+
+        async def send(self, **kwargs):
+            self.messages.append(kwargs["message"])
+            return "sent"
+
+    bot = FakeBot()
+    matcher = location_listener()
+    event = SimpleNamespace(
+        message=Message(
+            MessageSegment.text(
+                "[卡片消息] 位置卡片\n"
+                "摘要: [位置]栖霞区迈皋桥壹城(东区)\n"
+                "address: 江苏省南京市栖霞区万兴路辅路\n"
+                "desc: 栖霞区迈皋桥壹城(东区)"
+            )
+        )
+    )
+
+    async def run() -> None:
+        with matcher.ensure_context(bot, event):
+            with pytest.raises(FinishedException):
+                await handle_location_listener(event)
+
+    asyncio.run(run())
+    assert len(bot.messages) == 1
+    message = bot.messages[0]
+    assert isinstance(message, MessageSegment)
+    assert message.type == "markdown"
+    content = message.data["data"]["markdown"]["content"]
+    assert "已收到位置卡片" in content
+    assert "没有提供经纬度" in content
+    assert "位置：地点名 (纬度, 经度)" in content
 
 
 def test_nearcade_shop_url_uses_current_canonical_route() -> None:

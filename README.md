@@ -122,7 +122,7 @@ MessageSegment(
 
 ## Gensokyo 位置消息
 
-Gensokyo 的官方 QQ Bot 位置卡片目前可能只转发地点名称和地址，不保证携带 `lat/lon`。插件不会用 `0,0` 或猜测坐标调用 Nearcade；没有坐标时保持静默，不额外发送提示消息。
+Gensokyo 的官方 QQ Bot 位置卡片目前可能只转发地点名称和地址，不保证携带 `lat/lon`。插件不会用 `0,0` 或猜测坐标调用 Nearcade；收到这种卡片时会明确回复“缺少经纬度”，并提示可发送的文本格式。
 
 如果要查询附近机厅，请按 Gensokyo 位置文档的文本兼容格式发送：
 
@@ -130,7 +130,9 @@ Gensokyo 的官方 QQ Bot 位置卡片目前可能只转发地点名称和地址
 位置：栖霞区迈皋桥壹城 (32.112606, 118.834837)
 ```
 
-也接受带有 `latitude/longitude`、`lat/lng` 或 `经纬度` 标记的文本，以及 OneBot 原生 `location` 段。收到有效坐标后，插件才会调用 Nearcade 附近发现接口；没有坐标时不触发查询，也不发送额外提示。
+也接受标准 CQ 位置段（`[CQ:location,lat=...,lon=...,title=...,content=...]`）、带有 `latitude/longitude`、`lat/lng` 或 `经纬度` 标记的文本，以及 OneBot 原生 `location` 段。收到有效坐标后，插件才会调用 Nearcade 附近发现接口；没有坐标时只发送缺少坐标的说明，不触发 Nearcade 查询。
+
+注意：标准 CQ 位置段适用于能够转发 OneBot 位置段的来源；Gensokyo 官方 QQ Bot 的入站位置卡片目前仍可能只转换成上面的 `[卡片消息] 位置卡片` 文本，因此不能从这段文本反推出真实经纬度。
 
 参考：[Gensokyo 标准 CQ 位置说明](https://github.com/Te-River/Gensokyo-NewQQ/blob/main/docs/cq%E7%A0%81/%E6%A0%87%E5%87%86CQ%E7%A0%81/%E6%A0%87%E5%87%86cq%E7%A0%81-cq-location.md)。
 

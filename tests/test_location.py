@@ -80,6 +80,24 @@ def test_gensokyo_documented_text_coordinate_fallback_is_supported() -> None:
     assert location.title == "北京市天安门广场"
 
 
+def test_standard_cq_location_segment_is_supported() -> None:
+    segment = MessageSegment.text(
+        "[CQ:location,lat=32.112606,lon=118.834837,"
+        "title=栖霞区迈皋桥壹城&#44;东区,"
+        "content=江苏省南京市栖霞区万兴路辅路]"
+    )
+
+    location = MODULE.extract_location(Message(segment))
+
+    assert location is not None
+    assert location.source == "cq-location"
+    assert location.has_coordinates
+    assert location.latitude == 32.112606
+    assert location.longitude == 118.834837
+    assert location.title == "栖霞区迈皋桥壹城,东区"
+    assert location.address == "江苏省南京市栖霞区万兴路辅路"
+
+
 def test_unmarked_number_pair_is_not_treated_as_a_location() -> None:
     segment = MessageSegment.text("今日抽卡结果：39.908823, 116.397470")
 

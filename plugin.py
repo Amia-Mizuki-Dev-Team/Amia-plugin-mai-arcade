@@ -179,6 +179,38 @@ async def handle_arcade_help(event: GroupMessageEvent, message: Message = EventM
 location_listener = on_message(priority=100, block=False)
 
 
+def _location_coordinates_required_spec(location: LocationPayload):
+    """Build the reply used when a location card has no coordinates.
+
+    Gensokyo's official QQ Bot event can preserve the map-card title/address
+    while dropping latitude/longitude.  That is still a recognized location
+    event, but it cannot be sent to Nearcade's nearby-search endpoint.  Keep
+    the explanation in the normal ReplySpec path so Markdown and plain-text
+    deployments receive the same user-visible guidance.
+    """
+
+    title = escape_markdown(location.title or "未知位置")
+    address = escape_markdown(location.address or "未提供")
+    return reply_spec(
+        "# 已收到位置卡片\n\n"
+        f"- 地点：{title}\n"
+        f"- 地址：{address}\n\n"
+        "Gensokyo 官方 QQ Bot 的位置卡片只提供地点和地址，"
+        "没有提供经纬度，因此无法计算附近机厅。\n\n"
+        "请重新发送带坐标的文本：\n"
+        "`位置：地点名 (纬度, 经度)`\n\n"
+        "例如：\n"
+        "`位置：栖霞区迈皋桥壹城 (32.112606, 118.834837)`",
+        fallback_text=(
+            f"已收到位置：{location.title or '未知位置'}\n"
+            f"地址：{location.address or '未提供'}\n"
+            "Gensokyo 官方 QQ Bot 的位置卡片没有提供经纬度，"
+            "无法计算附近机厅。\n"
+            "请重新发送：位置：地点名 (纬度, 经度)"
+        ),
+    )
+
+
 @location_listener.handle()
 async def handle_location_listener(event: MessageEvent):
     """处理位置消息，自动发现附近机厅"""
@@ -188,9 +220,9 @@ async def handle_location_listener(event: MessageEvent):
 
     # Gensokyo currently exposes an official QQ map card as text containing
     # only ``address``/``desc``.  Do not invent coordinates or query Nearcade
-    # with (0, 0).  The card has already been handled by the client; without
-    # coordinates there is no nearby-search action to perform, so stay quiet.
+    # with (0, 0); explain the missing-coordinate requirement instead.
     if not location.has_coordinates:
+        await location_listener.finish(_location_coordinates_required_spec(location))
         return
 
     lat = location.latitude

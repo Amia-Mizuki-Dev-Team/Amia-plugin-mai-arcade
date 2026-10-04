@@ -20,6 +20,13 @@ from typing import Any, Iterable, Mapping, Optional
 _GENSOKYO_LOCATION_RE = re.compile(
     r"^\s*\[卡片消息\]\s*位置卡片(?:\s|$)", re.MULTILINE
 )
+_CQ_LOCATION_RE = re.compile(
+    r"\[CQ:location(?P<params>(?:,[^\]]*)?)\]", re.IGNORECASE
+)
+_CQ_PARAM_RE = re.compile(
+    r"(?P<key>[A-Za-z][A-Za-z0-9_-]*)=(?P<value>"
+    r"(?:[^,]|&#44;|&#91;|&#93;|&amp;)+)"
+)
 _FIELD_RE = re.compile(r"^\s*(?P<key>摘要|desc|address|地址|lat|latitude|lng|lon|longitude)\s*[:：]\s*(?P<value>.*?)\s*$", re.IGNORECASE | re.MULTILINE)
 _COORD_RE = re.compile(
     r"(?P<key>lat(?:itude)?|lng|lon(?:gitude)?)\s*[=:：]\s*"
@@ -52,6 +59,17 @@ class LocationPayload:
     @property
     def has_coordinates(self) -> bool:
         return self.latitude is not None and self.longitude is not None
+
+
+def _unescape_cq(value: str) -> str:
+    """Decode the entities used by Gensokyo/OneBot CQ parameters."""
+
+    return (
+        value.replace("&#44;", ",")
+        .replace("&#91;", "[")
+        .replace("&#93;", "]")
+        .replace("&amp;", "&")
+    )
 
 
 def _as_mapping(value: Any) -> Optional[Mapping[str, Any]]:
@@ -118,6 +136,38 @@ def _coordinate_pair(
     return None, None, None
 
 
+def _from_cq_location(text: str) -> Optional[LocationPayload]:
+    """Extract a standard ``[CQ:location,...]`` segment.
+
+    Gensokyo's current QQ Bot path does not emit this segment for an official
+    map card, but other OneBot sources can still provide it.  Supporting the
+    standard syntax here keeps the adapter compatible without treating an
+    arbitrary ``lat/lon`` text pair as a location.
+    """
+
+    for segment in _CQ_LOCATION_RE.finditer(text):
+        params = {
+            match.group("key").lower(): _unescape_cq(match.group("value")).strip()
+            for match in _CQ_PARAM_RE.finditer(segment.group("params"))
+        }
+        latitude = _number(params.get("lat") or params.get("latitude"))
+        longitude = _longitude(
+            params.get("lon") or params.get("lng") or params.get("longitude")
+        )
+        if latitude is None or longitude is None:
+            continue
+        title = params.get("title") or params.get("name") or "用户位置"
+        address = params.get("content") or params.get("address") or ""
+        return LocationPayload(
+            latitude,
+            longitude,
+            title=title,
+            address=address,
+            source="cq-location",
+        )
+    return None
+
+
 def _from_mapping(payload: Mapping[str, Any], source: str) -> Optional[LocationPayload]:
     """Extract a location from a CQ/ark-like mapping."""
 
@@ -171,6 +221,10 @@ def _from_mapping(payload: Mapping[str, Any], source: str) -> Optional[LocationP
 
 
 def _from_text(text: str) -> Optional[LocationPayload]:
+    cq_location = _from_cq_location(text)
+    if cq_location is not None:
+        return cq_location
+
     is_gensokyo_card = _GENSOKYO_LOCATION_RE.search(text) is not None
 
     fields = {
@@ -234,6 +288,9 @@ def _from_text(text: str) -> Optional[LocationPayload]:
 
 def extract_location(message: Iterable[Any]) -> Optional[LocationPayload]:
     """Extract the first location payload from a NoneBot message."""
+
+    if isinstance(message, str):
+        return _from_text(message)
 
     text_parts = []
     for segment in message:
