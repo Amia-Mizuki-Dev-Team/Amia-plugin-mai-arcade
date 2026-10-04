@@ -2,7 +2,7 @@
 
 NoneBot2 舞萌 DX 机厅助手插件，为 Amia 的 OneBot/Gensokyo 部署提供机厅人数、Nearcade 云同步、机厅管理、地图、别名和排卡功能。
 
-插件源码直接位于仓库根目录，仓库目录名和 NoneBot 发现到的插件名均为 `Amia-plugin-mai-arcade`，不再套一层同名的 `nonebot_plugin_mai_arcade/` 目录。
+插件源码直接位于仓库根目录，仓库目录名和 NoneBot 发现到的插件名均为 `Amia-plugin-mai-arcade`，不再套额外的内层插件目录。
 
 ## 功能
 
