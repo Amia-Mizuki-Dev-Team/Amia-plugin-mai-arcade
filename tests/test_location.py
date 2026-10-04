@@ -80,6 +80,19 @@ def test_gensokyo_documented_text_coordinate_fallback_is_supported() -> None:
     assert location.title == "北京市天安门广场"
 
 
+def test_nearby_arcade_short_coordinate_fallback_is_supported() -> None:
+    segment = MessageSegment.text("附近机厅 39.908823, 116.397470")
+
+    location = MODULE.extract_location(Message(segment))
+
+    assert location is not None
+    assert location.source == "gensokyo-text"
+    assert location.has_coordinates
+    assert location.latitude == 39.908823
+    assert location.longitude == 116.39747
+    assert location.title == "用户位置"
+
+
 def test_standard_cq_location_segment_is_supported() -> None:
     segment = MessageSegment.text(
         "[CQ:location,lat=32.112606,lon=118.834837,"

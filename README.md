@@ -133,10 +133,16 @@ Gensokyo 的官方 QQ Bot 位置卡片目前可能只转发地点名称和地址
 如果要查询附近机厅，请按 Gensokyo 位置文档的文本兼容格式发送：
 
 ```text
-位置：栖霞区迈皋桥壹城 (32.112606, 118.834837)
+位置：北京市天安门广场 (39.908823, 116.397470)
 ```
 
-也接受标准 CQ 位置段（`[CQ:location,lat=...,lon=...,title=...,content=...]`）、带有 `latitude/longitude`、`lat/lng` 或 `经纬度` 标记的文本，以及 OneBot 原生 `location` 段。收到有效坐标后，插件才会调用 Nearcade 附近发现接口；没有坐标时只发送缺少坐标的说明，不触发 Nearcade 查询。
+也可以直接发送更短的格式：
+
+```text
+附近机厅 39.908823, 116.397470
+```
+
+也接受标准 CQ 位置段（`[CQ:location,lat=...,lon=...,title=...,content=...]`）、带有 `latitude/longitude`、`lat/lng` 或 `经纬度` 标记的文本，以及 OneBot 原生 `location` 段。收到有效坐标后，插件才会调用 Nearcade 附近发现接口；没有坐标时会提供“填写坐标”按钮和手动格式说明，不触发 Nearcade 查询。
 
 注意：标准 CQ 位置段适用于能够转发 OneBot 位置段的来源；Gensokyo 官方 QQ Bot 的入站位置卡片目前仍可能只转换成上面的 `[卡片消息] 位置卡片` 文本，因此不能从这段文本反推出真实经纬度。
 

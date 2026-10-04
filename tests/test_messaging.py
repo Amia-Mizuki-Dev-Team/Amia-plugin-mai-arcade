@@ -193,8 +193,16 @@ def test_gensokyo_location_card_triggers_explanatory_reply_without_query() -> No
     assert message.type == "markdown"
     content = message.data["data"]["markdown"]["content"]
     assert "已收到位置卡片" in content
-    assert "没有提供经纬度" in content
-    assert "位置：地点名 (纬度, 经度)" in content
+    assert "没有携带经纬度" in content
+    assert "附近机厅 纬度, 经度" in content
+    assert "北京市天安门广场" in content
+    keyboard = message.data["data"]["keyboard"]["content"]["rows"]
+    button = keyboard[0]["buttons"][0]
+    assert button["id"] == "arcade_location_fill_coords"
+    assert button["render_data"]["label"] == "填写坐标"
+    assert button["action"]["type"] == 2
+    assert button["action"]["data"] == "位置："
+    assert button["action"]["permission"] == {"type": 2}
 
 
 def test_gensokyo_release015_sender_roles_match_plugin_admin_check() -> None:

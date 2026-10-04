@@ -12,3 +12,6 @@ data/
 *.db
 *.sqlite
 *.sqlite3
+sensitive_words_in.txt
+sensitive_words_out.txt
+white.txt

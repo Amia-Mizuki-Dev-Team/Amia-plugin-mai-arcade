@@ -41,7 +41,7 @@ _COORD_PAIR_RE = re.compile(
     r"(?![\d.])"
 )
 _COORD_HINT_RE = re.compile(
-    r"(?:坐标|经纬(?:度)?|位置|latitude|longitude|lat|lng|lon)",
+    r"(?:附近机厅|坐标|经纬(?:度)?|位置|latitude|longitude|lat|lng|lon)",
     re.IGNORECASE,
 )
 
@@ -268,7 +268,7 @@ def _from_text(text: str) -> Optional[LocationPayload]:
     if pair_match is not None:
         prefix = text[: pair_match.start()].strip()
         prefix = re.sub(
-            r"^(?:位置|地点|坐标|经纬(?:度)?)\s*[:：]?\s*",
+            r"^(?:附近机厅|位置|地点|坐标|经纬(?:度)?)\s*[:：]?\s*",
             "",
             prefix,
             flags=re.IGNORECASE,
