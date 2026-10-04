@@ -9,7 +9,7 @@ from pathlib import Path
 from nonebot.adapters.onebot.v11 import Message, MessageSegment
 
 
-MODULE_PATH = Path(__file__).resolve().parents[1] / "nonebot_plugin_mai_arcade" / "location.py"
+MODULE_PATH = Path(__file__).resolve().parents[1] / "location.py"
 SPEC = importlib.util.spec_from_file_location("mai_arcade_location_under_test", MODULE_PATH)
 assert SPEC and SPEC.loader
 MODULE = importlib.util.module_from_spec(SPEC)

@@ -4,9 +4,9 @@ with open('README.md', encoding="utf-8") as f:
     long_description = f.read()
 
 setup(
-    name='nonebot-plugin-mai-arcade',
+    name='Amia-plugin-mai-arcade',
     version='0.2.0.1',
-    description='maimai arcade nonebot2 plugin',
+    description='Amia 舞萌 DX 机厅助手插件',
     long_description=long_description,
     long_description_content_type='text/markdown',
     author='Amia-Mizuki-Dev-Team',

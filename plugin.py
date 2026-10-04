@@ -28,8 +28,8 @@ from .location import LocationPayload, extract_location
 
 
 __plugin_meta__ = PluginMetadata(
-    name="nonebot_plugin_mai_arcade",
-    description="NoneBot2插件 为舞萌玩家提供机厅人数上报、附近机厅查找、线上排卡、Nearcade云同步等功能支持",
+    name="Amia-plugin-mai-arcade",
+    description="Amia 舞萌机厅助手：机厅人数、附近机厅、线上排卡和 Nearcade 云同步",
     usage="使用 机厅help 指令获取使用说明",
     type="application",
     homepage="https://github.com/Amia-Mizuki-Dev-Team/Amia-plugin-mai-arcade",

@@ -27,6 +27,8 @@ try:
     arcade_data_file: Path = store.get_plugin_data_file("arcade_data.json")
     arcade_marker_file: Path = store.get_plugin_data_file("arcade_cache_marker.json")
 except RuntimeError:
+    # Keep the historical data directory so flattening the source tree does
+    # not silently lose existing arcade data during an upgrade.
     fallback_data_dir = Path("data") / "nonebot_plugin_mai_arcade"
     fallback_data_dir.mkdir(parents=True, exist_ok=True)
     arcade_data_file = fallback_data_dir / "arcade_data.json"

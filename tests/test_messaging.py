@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import importlib.util
 import os
 import sys
 from pathlib import Path
@@ -14,24 +15,35 @@ from nonebot.exception import ActionFailed, NetworkError
 
 
 PLUGIN_ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(PLUGIN_ROOT))
 os.environ.setdefault("MAI_ARCADE_MARKDOWN_MODE", "on")
 nonebot.init(_env_file=None)
-nonebot.load_plugin("nonebot_plugin_mai_arcade")
 
-from nonebot_plugin_mai_arcade import arcade_help  # noqa: E402
-from nonebot_plugin_mai_arcade.config import plugin_config  # noqa: E402
-from nonebot_plugin_mai_arcade.handlers.arcade import _search_reply_spec  # noqa: E402
-from nonebot_plugin_mai_arcade.handlers.count import (  # noqa: E402
+# The source checkout is intentionally a NoneBot plugin at the repository
+# root, whose directory contains hyphens for Amia's naming convention. Load it
+# under a test-only import alias so relative imports remain package-correct.
+_spec = importlib.util.spec_from_file_location(
+    "amia_plugin_mai_arcade",
+    PLUGIN_ROOT / "__init__.py",
+    submodule_search_locations=[str(PLUGIN_ROOT)],
+)
+assert _spec and _spec.loader
+_module = importlib.util.module_from_spec(_spec)
+sys.modules[_spec.name] = _module
+_spec.loader.exec_module(_module)
+
+from amia_plugin_mai_arcade import arcade_help  # noqa: E402
+from amia_plugin_mai_arcade.config import plugin_config  # noqa: E402
+from amia_plugin_mai_arcade.handlers.arcade import _search_reply_spec  # noqa: E402
+from amia_plugin_mai_arcade.handlers.count import (  # noqa: E402
     _count_reply,
     _COUNT_INPUT_PATTERN,
     _nearcade_attendance_path,
     _nearcade_shop_path,
     sv_arcade,
 )
-from nonebot_plugin_mai_arcade.handlers.arcade import query_updated_arcades  # noqa: E402
-from nonebot_plugin_mai_arcade.utils import get_shop_url  # noqa: E402
-from nonebot_plugin_mai_arcade.messaging import (  # noqa: E402
+from amia_plugin_mai_arcade.handlers.arcade import query_updated_arcades  # noqa: E402
+from amia_plugin_mai_arcade.utils import get_shop_url  # noqa: E402
+from amia_plugin_mai_arcade.messaging import (  # noqa: E402
     build_markdown_segment,
     command_button,
     escape_markdown,

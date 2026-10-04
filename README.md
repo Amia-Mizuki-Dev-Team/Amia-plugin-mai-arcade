@@ -2,7 +2,7 @@
 
 NoneBot2 舞萌 DX 机厅助手插件，为 Amia 的 OneBot/Gensokyo 部署提供机厅人数、Nearcade 云同步、机厅管理、地图、别名和排卡功能。
 
-插件的 Python 导入名仍为 `nonebot_plugin_mai_arcade`，仓库名使用 `Amia-plugin-` 前缀以便在 Amia 插件集合中统一管理。
+插件源码直接位于仓库根目录，仓库目录名和 NoneBot 发现到的插件名均为 `Amia-plugin-mai-arcade`，不再套一层同名的 `nonebot_plugin_mai_arcade/` 目录。
 
 ## 功能
 
@@ -32,18 +32,15 @@ git clone https://github.com/Amia-Mizuki-Dev-Team/Amia-plugin-mai-arcade.git src
 python -m pip install -r src/plugins/Amia-plugin-mai-arcade/requirements.txt
 ```
 
-Amia 项目的 `plugin_dirs` 已包含 `src/plugins`，克隆后可以直接由 NoneBot 扫描。若使用独立 NoneBot 项目，也可以在 `pyproject.toml` 中启用：
+Amia 项目的 `plugin_dirs` 已包含 `src/plugins`，克隆后可以直接由 NoneBot 扫描。仓库根目录的 `__init__.py` 就是插件入口，不需要再进入或复制其他同名插件目录。若使用独立 NoneBot 项目，也可以在 `pyproject.toml` 中启用：
 
 ```toml
 [tool.nonebot]
-plugins = ["nonebot_plugin_mai_arcade"]
+plugins = ["Amia-plugin-mai-arcade"]
 ```
 
-也可以在仓库根目录执行可编辑安装：
-
-```powershell
-python -m pip install -e .
-```
+这是一个直接放入 NoneBot `plugin_dirs` 的源码插件；不要把仓库再复制到
+`Amia-plugin-mai-arcade/nonebot_plugin_mai_arcade/`，也不需要通过可编辑安装制造第二层包目录。
 
 ## 配置
 
@@ -206,7 +203,7 @@ wxha几
 
 ```powershell
 python -m pytest -q
-python -m compileall -q nonebot_plugin_mai_arcade
+python -m compileall -q .
 git diff --check
 ```
 
