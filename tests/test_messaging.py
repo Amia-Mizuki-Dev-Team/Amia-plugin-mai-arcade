@@ -59,6 +59,16 @@ from amia_plugin_mai_arcade.messaging import (  # noqa: E402
     reply_spec,
     safe_link_button,
 )
+from amia_plugin_mai_arcade.services import (  # noqa: E402
+    GeocodeResult,
+    _location_from_tencent_payload,
+    _tencent_sig,
+    gcj02_to_wgs84,
+    geocode_address,
+    resolve_address,
+)
+import amia_plugin_mai_arcade.services as services_module  # noqa: E402
+import amia_plugin_mai_arcade.plugin as plugin_module  # noqa: E402
 
 
 def test_official_nested_markdown_and_keyboard_shape() -> None:
@@ -157,7 +167,17 @@ def test_search_and_count_payloads_keep_existing_flows() -> None:
     )
 
 
-def test_gensokyo_location_card_triggers_explanatory_reply_without_query() -> None:
+def test_gensokyo_location_card_triggers_explanatory_reply_without_query(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Keep this regression test independent from developer-machine provider
+    # credentials. This test specifically covers the no-coordinate
+    # explanatory fallback.
+    async def no_geocode(address: str, *, city: str | None = None):
+        return None
+
+    monkeypatch.setattr(plugin_module, "resolve_address", no_geocode)
+
     class FakeBot:
         self_id = "official-gensokyo-test"
 
@@ -203,6 +223,78 @@ def test_gensokyo_location_card_triggers_explanatory_reply_without_query() -> No
     assert button["action"]["type"] == 2
     assert button["action"]["data"] == "位置："
     assert button["action"]["permission"] == {"type": 2}
+
+
+def test_location_listener_ignores_own_markdown_reply_echo() -> None:
+    """A bot reply containing the coordinate example must not re-trigger search."""
+
+    class FakeBot:
+        self_id = "official-gensokyo-test"
+
+        def __init__(self) -> None:
+            self.messages = []
+
+        async def send(self, **kwargs):
+            self.messages.append(kwargs["message"])
+            return "sent"
+
+    bot = FakeBot()
+    matcher = location_listener()
+    event = SimpleNamespace(
+        message=Message(
+            MessageSegment.text(
+                "# 已收到位置卡片\n\n"
+                "当前 Gensokyo 位置卡片只有地点和地址，没有携带经纬度。\n"
+                "示例：`位置：北京市天安门广场 (39.908823, 116.397470)`"
+            )
+        ),
+        message_id=990001,
+        self_id=bot.self_id,
+    )
+
+    async def run() -> None:
+        with matcher.ensure_context(bot, event):
+            await handle_location_listener(event)
+
+    asyncio.run(run())
+    assert bot.messages == []
+
+
+def test_location_listener_claims_one_message_id_only(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Duplicate matcher registration must not send two nearby replies."""
+
+    async def fake_discover(lat, lon, radius=10, name=None, *, convert_from=None):
+        return ({"shops": []}, "https://nearcade.cn/discover")
+
+    monkeypatch.setattr(plugin_module, "call_discover", fake_discover)
+
+    class FakeBot:
+        self_id = "official-gensokyo-test"
+
+        def __init__(self) -> None:
+            self.messages = []
+
+        async def send(self, **kwargs):
+            self.messages.append(kwargs["message"])
+            return "sent"
+
+    bot = FakeBot()
+    matcher = location_listener()
+    event = SimpleNamespace(
+        message=Message(MessageSegment.text("附近机厅 32.112606, 118.834837")),
+        message_id=990002,
+        self_id=bot.self_id,
+    )
+
+    async def run() -> None:
+        with matcher.ensure_context(bot, event):
+            with pytest.raises(FinishedException):
+                await handle_location_listener(event)
+        with matcher.ensure_context(bot, event):
+            await handle_location_listener(event)
+
+    asyncio.run(run())
+    assert len(bot.messages) == 1
 
 
 def test_gensokyo_release015_sender_roles_match_plugin_admin_check() -> None:
@@ -406,3 +498,140 @@ def test_network_error_is_not_hidden_by_plain_text_retry() -> None:
 
     asyncio.run(run())
     assert len(bot.messages) == 1
+
+
+def test_tencent_payload_signature_and_coordinate_conversion() -> None:
+    assert _location_from_tencent_payload(
+        {"status": 0, "result": {"location": {"lat": 32.112606, "lng": 118.834837}}}
+    ) == (32.112606, 118.834837)
+    assert _location_from_tencent_payload({"status": 347, "result": {}}) is None
+
+    assert _tencent_sig(
+        "/ws/geocoder/v1/",
+        [("key", "demo-key"), ("address", "南京市栖霞区")],
+        "demo-secret",
+    ) == __import__("hashlib").md5(
+        "/ws/geocoder/v1/?address=南京市栖霞区&key=demo-keydemo-secret".encode("utf-8")
+    ).hexdigest()
+
+    converted = gcj02_to_wgs84(32.112606, 118.834837)
+    assert converted != (32.112606, 118.834837)
+    assert -90 <= converted[0] <= 90 and -180 <= converted[1] <= 180
+    assert gcj02_to_wgs84(60.0, 10.0) == (60.0, 10.0)
+
+
+def test_tencent_geocode_returns_gps_marker_and_uses_optional_sig(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    class FakeResponse:
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict[str, object]:
+            return {
+                "status": 0,
+                "message": "query ok",
+                "result": {"location": {"lat": 32.112606, "lng": 118.834837}},
+            }
+
+    class FakeClient:
+        def __init__(self, **kwargs: object) -> None:
+            captured["client_kwargs"] = kwargs
+
+        async def __aenter__(self) -> "FakeClient":
+            return self
+
+        async def __aexit__(self, *args: object) -> None:
+            return None
+
+        async def get(self, url: str, *, params: object) -> FakeResponse:
+            captured["url"] = url
+            captured["params"] = params
+            return FakeResponse()
+
+    monkeypatch.setattr(services_module.httpx, "AsyncClient", FakeClient)
+    monkeypatch.setattr(plugin_config, "tencent_key", "temporary-tencent-key")
+    monkeypatch.setattr(plugin_config, "tencent_sk", "temporary-tencent-sk")
+
+    result = asyncio.run(services_module._geocode_address_tencent("南京市栖霞区"))
+
+    assert result is not None
+    assert result.provider == "tencent"
+    assert result.convert_from == "gps"
+    assert captured["url"] == "https://apis.map.qq.com/ws/geocoder/v1/"
+    sent_params = captured["params"]
+    assert isinstance(sent_params, list)
+    assert any(key == "sig" for key, _ in sent_params)
+    assert all("temporary-tencent-sk" not in str(item) for item in sent_params)
+
+
+def test_geocoder_uses_only_tencent_and_ignores_removed_providers(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[str] = []
+
+    async def fake_tencent(address: str, city: str | None = None) -> GeocodeResult | None:
+        calls.append("tencent")
+        return GeocodeResult(32.0, 118.0, "tencent", "gps")
+
+    monkeypatch.setattr(services_module, "_geocode_address_tencent", fake_tencent)
+    monkeypatch.setattr(plugin_config, "geocoder_order", ["legacy", "tencent"])
+    monkeypatch.setattr(services_module, "_geocoder_rotation_cursor", 0)
+
+    first = asyncio.run(resolve_address("南京市栖霞区"))
+    second = asyncio.run(resolve_address("南京市栖霞区"))
+
+    assert first == GeocodeResult(32.0, 118.0, "tencent", "gps")
+    assert second == GeocodeResult(32.0, 118.0, "tencent", "gps")
+    assert calls == ["tencent", "tencent"]
+
+
+def test_gensokyo_location_card_geocodes_before_nearcade(monkeypatch: pytest.MonkeyPatch) -> None:
+    class FakeBot:
+        self_id = "official-gensokyo-test"
+
+        def __init__(self) -> None:
+            self.messages = []
+
+        async def send(self, **kwargs):
+            self.messages.append(kwargs["message"])
+            return "sent"
+
+    async def fake_geocode(address: str, *, city=None):
+        assert "万兴路辅路" in address
+        return GeocodeResult(32.112606, 118.834837, "tencent", "gps")
+
+    async def fake_discover(lat, lon, radius=10, name=None, *, convert_from=None):
+        assert (lat, lon) == (32.112606, 118.834837)
+        assert convert_from == "gps"
+        return (
+            {"shops": [{"name": "星际传奇", "distance": 0.8, "address": {"detailed": "紫东路2号"}}]},
+            "https://nearcade.cn/discover?convertFrom=gps",
+        )
+
+    monkeypatch.setattr(plugin_module, "resolve_address", fake_geocode)
+    monkeypatch.setattr(plugin_module, "call_discover", fake_discover)
+
+    bot = FakeBot()
+    matcher = location_listener()
+    event = SimpleNamespace(
+        message=Message(
+            MessageSegment.text(
+                "[卡片消息] 位置卡片\n"
+                "摘要: [位置]栖霞区迈皋桥壹城(东区)\n"
+                "address: 江苏省南京市栖霞区万兴路辅路\n"
+                "desc: 栖霞区迈皋桥壹城(东区)"
+            )
+        )
+    )
+
+    async def run() -> None:
+        with matcher.ensure_context(bot, event):
+            with pytest.raises(FinishedException):
+                await handle_location_listener(event)
+
+    asyncio.run(run())
+    assert len(bot.messages) == 1
+    assert "附近机厅" in bot.messages[0].data["data"]["markdown"]["content"]

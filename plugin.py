@@ -5,6 +5,7 @@ NoneBot2 舞萌DX机厅插件
 
 import datetime
 import json
+import time
 from pathlib import Path
 from typing import Optional
 
@@ -23,7 +24,7 @@ from .messaging import (
     safe_link_button,
     reply_spec,
 )
-from .services import call_discover
+from .services import call_discover, resolve_address
 from .location import LocationPayload, extract_location
 
 
@@ -179,6 +180,60 @@ async def handle_arcade_help(event: GroupMessageEvent, message: Message = EventM
 location_listener = on_message(priority=100, block=False)
 
 
+# Gensokyo/OneBot echoes messages sent by the bot back through the event
+# stream. A location reply contains the documented coordinate example, so an
+# echo can otherwise be parsed as a fresh user location and trigger a second
+# Nearcade request. Keep these guards local to this plugin.
+_LOCATION_REPLY_MARKERS = (
+    "# 已收到位置卡片",
+    "# 附近机厅",
+    "# 附近没有找到机厅",
+    "当前 Gensokyo 位置卡片只有地点和地址",
+)
+_LOCATION_EVENT_CACHE: dict[str, float] = {}
+_LOCATION_EVENT_CACHE_TTL = 60.0
+_LOCATION_EVENT_CACHE_LIMIT = 1024
+
+
+def _is_arcade_location_reply_echo(event: MessageEvent) -> bool:
+    """Return whether an incoming text is one of our own location replies."""
+
+    try:
+        message_text = str(event.message)
+    except Exception:
+        return False
+    return any(marker in message_text for marker in _LOCATION_REPLY_MARKERS)
+
+
+def _claim_location_event(event: MessageEvent) -> bool:
+    """Claim one event id so duplicate matcher registration cannot re-run it."""
+
+    message_id = getattr(event, "message_id", None)
+    if message_id in (None, ""):
+        # Synthetic events and adapters without ids cannot be de-duplicated;
+        # the outgoing-echo guard above still protects the production loop.
+        return True
+
+    now = time.monotonic()
+    stale_keys = [
+        key
+        for key, timestamp in _LOCATION_EVENT_CACHE.items()
+        if now - timestamp > _LOCATION_EVENT_CACHE_TTL
+    ]
+    for key in stale_keys:
+        _LOCATION_EVENT_CACHE.pop(key, None)
+
+    event_key = f"{getattr(event, 'self_id', '')}:{message_id}"
+    if event_key in _LOCATION_EVENT_CACHE:
+        return False
+    _LOCATION_EVENT_CACHE[event_key] = now
+
+    if len(_LOCATION_EVENT_CACHE) > _LOCATION_EVENT_CACHE_LIMIT:
+        oldest_key = min(_LOCATION_EVENT_CACHE, key=_LOCATION_EVENT_CACHE.get)
+        _LOCATION_EVENT_CACHE.pop(oldest_key, None)
+    return True
+
+
 def _location_coordinates_required_spec(location: LocationPayload):
     """Build the reply used when a location card has no coordinates.
 
@@ -196,7 +251,7 @@ def _location_coordinates_required_spec(location: LocationPayload):
         f"- 地点：{title}\n"
         f"- 地址：{address}\n\n"
         "当前 Gensokyo 位置卡片只有地点和地址，没有携带经纬度，"
-        "所以这次还不能计算附近机厅。\n\n"
+        "自动地址解析也没有返回可用坐标，所以这次还不能计算附近机厅。\n\n"
         "你可以任选一种方式继续：\n"
         "- 点击“填写坐标”，补全 `位置：地点名 (纬度, 经度)`\n"
         "- 直接发送 `附近机厅 纬度, 经度`\n\n"
@@ -205,7 +260,8 @@ def _location_coordinates_required_spec(location: LocationPayload):
         fallback_text=(
             f"已收到位置：{location.title or '未知位置'}\n"
             f"地址：{location.address or '未提供'}\n"
-            "当前位置卡片没有提供经纬度，暂时无法计算附近机厅。\n"
+            "当前位置卡片没有提供经纬度，自动地址解析也没有返回可用坐标，"
+            "暂时无法计算附近机厅。\n"
             "请点击填写坐标，或发送：附近机厅 纬度, 经度\n"
             "示例：附近机厅 39.908823, 116.397470"
         ),
@@ -230,21 +286,64 @@ async def handle_location_listener(event: MessageEvent):
     if location is None:
         return
 
-    # Gensokyo currently exposes an official QQ map card as text containing
-    # only ``address``/``desc``.  Do not invent coordinates or query Nearcade
-    # with (0, 0); explain the missing-coordinate requirement instead.
-    if not location.has_coordinates:
-        await location_listener.finish(_location_coordinates_required_spec(location))
+    if _is_arcade_location_reply_echo(event):
+        logger.debug("忽略 mai_arcade 自身位置回复回显")
+        return
+    if not _claim_location_event(event):
+        logger.debug("忽略重复的位置事件：message_id={}", getattr(event, "message_id", None))
         return
 
-    lat = location.latitude
-    lon = location.longitude
+    logger.info(
+        "mai_arcade 收到位置：source={} has_coordinates={} address_present={}",
+        location.source,
+        location.has_coordinates,
+        bool(location.address),
+    )
+
+    convert_from = None
+    if not location.has_coordinates:
+        # Gensokyo's official QQ map card normally contains only a title and
+        # address.  Resolve that address through the configured rotating
+        # geocoder providers before falling back to the documented manual
+        # format.
+        address = location.address or location.title
+        geocoded = await resolve_address(address)
+        if geocoded is None:
+            logger.warning("mai_arcade 地址解析未返回坐标：source={}", location.source)
+            await location_listener.finish(_location_coordinates_required_spec(location))
+            return
+        lat, lon = geocoded.latitude, geocoded.longitude
+        # Tencent returns GCJ-02 and is converted locally to WGS-84 because
+        # Nearcade accepts ``gps`` rather than that marker.
+        # The resolver records the correct source marker.
+        convert_from = geocoded.convert_from
+        logger.info(
+            "mai_arcade 地址解析成功：provider={} convert_from={}",
+            geocoded.provider,
+            convert_from,
+        )
+    else:
+        lat = location.latitude
+        lon = location.longitude
+
     # ``has_coordinates`` guarantees both values are present; keeping this
     # guard makes the type narrowing explicit for Python 3.8 runtimes.
     if lat is None or lon is None:
         return
 
-    result, web_url = await call_discover(lat, lon, radius=10, name=location.title)
+    result, web_url = await call_discover(
+        lat,
+        lon,
+        radius=10,
+        name=location.title,
+        convert_from=convert_from,
+    )
+
+    logger.info(
+        "mai_arcade 附近机厅查询完成：shop_count={} detail_url_present={}",
+        len(result.get("shops", [])) if isinstance(result, dict) else 0,
+        bool(web_url),
+    )
 
     shops = result.get("shops", [])
     if not shops:

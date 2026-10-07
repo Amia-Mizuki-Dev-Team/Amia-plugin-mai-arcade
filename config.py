@@ -67,11 +67,44 @@ class SmartTipRule(BaseModel):
 class Config(BaseModel):
     """插件配置类
     nearcade_api_token: Nearcade 开发者 API令牌
+    tencent_key: 腾讯位置服务 WebService Key
+    tencent_sk: 腾讯位置服务签名用 Secret Key（可选）
+    geocoder_order: 地址解析服务轮询顺序
     count_smart_tips: 排队等待时间提示规则列表，按 max_minutes 升序匹配，max_minutes=0 表示无需等待
     """
     # Keep credentials outside the repository.  Read a real token from the
     # project's environment file when Nearcade write operations are enabled.
     nearcade_api_token: str = ""
+    tencent_key: str = Field(
+        default="",
+        validation_alias=AliasChoices(
+            "tencent_key",
+            "TENCENT_KEY",
+            "mai_arcade_tencent_key",
+            "MAI_ARCADE_TENCENT_KEY",
+        ),
+    )
+    tencent_sk: str = Field(
+        default="",
+        validation_alias=AliasChoices(
+            "tencent_sk",
+            "TENCENT_SK",
+            "mai_arcade_tencent_sk",
+            "MAI_ARCADE_TENCENT_SK",
+            "tencent_secret_key",
+            "TENCENT_SECRET_KEY",
+            "mai_arcade_tencent_secret_key",
+            "MAI_ARCADE_TENCENT_SECRET_KEY",
+        ),
+    )
+    geocoder_order: list[str] = Field(
+        default_factory=lambda: ["tencent"],
+        validation_alias=AliasChoices(
+            "geocoder_order",
+            "MAI_ARCADE_GEOCODER_ORDER",
+            "mai_arcade_geocoder_order",
+        ),
+    )
     count_smart_tips: list[SmartTipRule] = [
         SmartTipRule(max_minutes=0, tip="✅ 无需等待，快去出勤吧！"),
         SmartTipRule(max_minutes=20, tip="✅ 舞萌启动！"),

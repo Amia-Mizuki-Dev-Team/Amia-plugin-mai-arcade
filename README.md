@@ -50,6 +50,16 @@ plugins = ["Amia-plugin-mai-arcade"]
 # Nearcade API token。人数写入 Nearcade 时需要；查询公开数据不依赖它。
 NEARCADE_API_TOKEN=your_nearcade_token_here
 
+# 可选：腾讯位置服务 WebService Key。腾讯地理编码返回 GCJ-02，插件会在本地转为 WGS-84。
+MAI_ARCADE_TENCENT_KEY=your_tencent_webservice_key_here
+
+# 可选：腾讯签名校验 Secret Key。只有控制台为该 Key 开启签名校验时才填写。
+MAI_ARCADE_TENCENT_SK=your_tencent_secret_key_here
+
+# 可选：地址解析轮询顺序。每次地址卡片从下一个已配置服务开始，失败后继续回退。
+# 当前仅使用腾讯；保留数组格式便于后续扩展。
+MAI_ARCADE_GEOCODER_ORDER='["tencent"]'
+
 # 可选：按预计等待时间自定义提示，必须是 JSON 数组。
 COUNT_SMART_TIPS='[{"max_minutes":0,"tip":"✅ 无需等待，快去出勤吧！"},{"max_minutes":20,"tip":"✅ 舞萌启动！"},{"max_minutes":40,"tip":"🕰️ 小排队还能忍"},{"max_minutes":90,"tip":"💀 DBD，纯折磨，建议换店"},{"max_minutes":9999,"tip":"🪦 建议回家（或者明天再来）"}]'
 
@@ -142,7 +152,7 @@ Gensokyo 的官方 QQ Bot 位置卡片目前可能只转发地点名称和地址
 附近机厅 39.908823, 116.397470
 ```
 
-也接受标准 CQ 位置段（`[CQ:location,lat=...,lon=...,title=...,content=...]`）、带有 `latitude/longitude`、`lat/lng` 或 `经纬度` 标记的文本，以及 OneBot 原生 `location` 段。收到有效坐标后，插件才会调用 Nearcade 附近发现接口；没有坐标时会提供“填写坐标”按钮和手动格式说明，不触发 Nearcade 查询。
+也接受标准 CQ 位置段（`[CQ:location,lat=...,lon=...,title=...,content=...]`）、带有 `latitude/longitude`、`lat/lng` 或 `经纬度` 标记的文本，以及 OneBot 原生 `location` 段。收到有效坐标后，插件会调用 Nearcade 附近发现接口；Gensokyo 官方位置卡片只有地址时，会调用已配置的腾讯地址解析服务。腾讯返回的 GCJ-02 坐标会先在本地转换为 WGS-84，再以 `convertFrom=gps` 调用 Nearcade。所有服务未配置、权限不足或地址无法解析时，才提供“填写坐标”按钮和手动格式说明。
 
 注意：标准 CQ 位置段适用于能够转发 OneBot 位置段的来源；Gensokyo 官方 QQ Bot 的入站位置卡片目前仍可能只转换成上面的 `[卡片消息] 位置卡片` 文本，因此不能从这段文本反推出真实经纬度。
 
